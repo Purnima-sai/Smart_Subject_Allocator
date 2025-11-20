@@ -9,7 +9,7 @@ import {
   useTheme,
   Box,
   Container,
-  Avatar,
+  // Avatar, // removed unused import
   Tooltip,
   useMediaQuery,
   Drawer,
@@ -29,13 +29,15 @@ import {
   Star as StarIcon,
   ContactMail as ContactMailIcon,
   Login as LoginIcon,
-  PersonAdd as PersonAddIcon,
+  // PersonAdd as PersonAddIcon, // removed unused import
   School as SchoolIcon,
 } from '@mui/icons-material';
 import ColorModeContext from '../../context/ColorModeContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Navbar = () => {
   const theme = useTheme();
+  const { logout } = useAuth();
   const colorMode = useContext(ColorModeContext);
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -48,8 +50,11 @@ const Navbar = () => {
   const isLoggedIn = localStorage.getItem('token');
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userType');
+    // Use central auth context logout to clear all state
+    logout();
+    // Also remove any user object for safety
+    localStorage.removeItem('user');
+    // Navigate to login
     navigate('/login');
   };
 

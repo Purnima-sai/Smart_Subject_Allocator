@@ -20,9 +20,20 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Small helper to protect routes
 function ProtectedRoute({ role: requiredRole, children }) {
-  const { isAuthenticated, role } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (requiredRole && role !== requiredRole) return <Navigate to={`/${role}/dashboard`} replace />;
+  // Check localStorage directly for persistent auth
+  const token = localStorage.getItem('token');
+  const userType = localStorage.getItem('userType');
+  
+  // If no token, redirect to login
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // If role required and doesn't match, redirect to correct dashboard
+  if (requiredRole && userType !== requiredRole) {
+    return <Navigate to={`/${userType}/dashboard`} replace />;
+  }
+  
   return children;
 }
 

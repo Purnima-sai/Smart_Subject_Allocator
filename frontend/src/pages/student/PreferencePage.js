@@ -3,7 +3,15 @@ import { saveSubjects } from '../utils/auth';
 
 export default function PreferencePage({ subjects = [], user, onSubmitted }) {
   const [prefs, setPrefs] = useState(() => {
-    // initialize from saved preferences if any
+    // Initialize from user's existing preferences if locked
+    if (user && user.preferences && user.preferences.length > 0) {
+      const prefMap = {};
+      user.preferences.forEach((pref, index) => {
+        prefMap[pref._id] = index + 1; // Priority is index + 1
+      });
+      return prefMap;
+    }
+    // Otherwise check localStorage
     try {
       const raw = localStorage.getItem('ssaems_prefs');
       if (raw) return JSON.parse(raw);
@@ -12,6 +20,8 @@ export default function PreferencePage({ subjects = [], user, onSubmitted }) {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  const isLocked = (user && user.preferencesLocked) || justSubmitted;
 
   const list = useMemo(() => {
     // If no subjects provided, seed with defaults
@@ -47,7 +57,13 @@ export default function PreferencePage({ subjects = [], user, onSubmitted }) {
     else setError('');
   };
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
+    // Prevent submission if already locked
+    if (isLocked) {
+      setError('Preferences are already locked and cannot be modified');
+      return;
+    }
+    
     if (error) return;
     const selected = Object.entries(prefs)
       .filter(([_, v]) => v && !isNaN(v))
@@ -57,26 +73,87 @@ export default function PreferencePage({ subjects = [], user, onSubmitted }) {
       setError('Please choose at least one preference');
       return;
     }
+    
     try {
+      // Send preferences to backend
+      const token = localStorage.getItem('token');
+      const preferences = selected.map(s => s.id); // Array of subject IDs
+      
+      console.log('Submitting preferences:', preferences);
+      console.log('Selected subjects with priorities:', selected);
+      
+      const response = await fetch('/api/students/preferences', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ preferences })
+      });
+      
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', errorData);
+        throw new Error(errorData.message || 'Failed to submit preferences');
+      }
+      
+      const responseData = await response.json();
+      console.log('Success response:', responseData);
+      
+      // Show success message first
+      setSuccess('Preferences submitted and locked successfully! Refreshing...');
+      setError(''); // Clear any errors
+      
+      // Also save to localStorage for backward compatibility
       const raw = localStorage.getItem('ssaems_prefs');
       const obj = raw ? JSON.parse(raw) : {};
       const map = (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {};
       if (user && user.idNumber) {
         map[user.idNumber] = selected;
         localStorage.setItem('ssaems_prefs', JSON.stringify(map));
-      } else {
-        // fallback: store as last-submitted if no user id is available
-        localStorage.setItem('ssaems_prefs', JSON.stringify({ __last__: selected }));
       }
-    } catch (_) {}
-    setSuccess('Preferences submitted successfully!');
-    if (typeof onSubmitted === 'function') onSubmitted();
+      
+      // Mark as locked locally to immediately disable UI
+      setJustSubmitted(true);
+
+      // Call parent callback to refresh profile/state
+      if (typeof onSubmitted === 'function') {
+        try {
+          await onSubmitted();
+        } catch (e) {
+          // ignore callback errors
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to submit preferences');
+      console.error('Preference submission error:', err);
+    }
   };
 
   return (
     <div className="card" style={{ border: '1px solid #e0e0e0', borderRadius: 12, padding: 16 }}>
       <h3 style={{ marginTop: 0 }}>Elective Preference</h3>
-      <p style={{ color: '#666', marginTop: -8 }}>Assign a unique priority (1-10) for each course you want.</p>
+      
+      {isLocked && (
+        <div style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+          <strong>🔒 Preferences Locked</strong>
+          <p style={{ margin: '4px 0 0 0', fontSize: '14px' }}>
+            Your preferences have been submitted and locked. You can view them below but cannot modify them.
+            {user.preferencesSubmittedAt && (
+              <span style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>
+                Submitted on: {new Date(user.preferencesSubmittedAt).toLocaleString()}
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+      
+      {!isLocked && (
+        <p style={{ color: '#666', marginTop: -8 }}>Assign a unique priority (1-10) for each course you want.</p>
+      )}
+      
       {error && <div style={{ color: '#b00020', marginBottom: 8 }}>{error}</div>}
       {success && (
         <div style={{ background: '#e8f5e9', color: '#1b5e20', border: '1px solid #c8e6c9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
@@ -113,18 +190,28 @@ export default function PreferencePage({ subjects = [], user, onSubmitted }) {
                 max={10}
                 value={prefs[s.id] ?? ''}
                 onChange={(e) => setPriority(s.id, e.target.value)}
-                style={{ width: 120, padding: 8, borderRadius: 8, border: '1px solid #e0e0e0' }}
+                disabled={isLocked}
+                style={{ 
+                  width: 120, 
+                  padding: 8, 
+                  borderRadius: 8, 
+                  border: '1px solid #e0e0e0',
+                  background: isLocked ? '#f5f5f5' : '#fff',
+                  cursor: isLocked ? 'not-allowed' : 'text'
+                }}
               />
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ textAlign: 'right', marginTop: 16 }}>
-        <button onClick={onSubmit} style={{ background: '#1976d2', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: 'pointer' }}>
-          Submit Preferences
-        </button>
-      </div>
+      {!isLocked && (
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <button onClick={onSubmit} style={{ background: '#1976d2', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: 'pointer' }}>
+            Submit Preferences
+          </button>
+        </div>
+      )}
     </div>
   );
 }

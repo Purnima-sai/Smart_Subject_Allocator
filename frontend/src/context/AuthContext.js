@@ -35,17 +35,18 @@ export const AuthProvider = ({ children }) => {
   }, [isAuthenticated, role, user]);
 
   // Login implementation
-  const login = async ({ username, role: selectedRole }) => {
-    // Simulate roundtrip
-    await new Promise((r) => setTimeout(r, 300));
-    
-    // Set auth state
+  const login = async ({ username, role: selectedRole, token }) => {
+    // Optional small delay if needed
+    await new Promise((r) => setTimeout(r, 50));
+
     setIsAuthenticated(true);
     setRole(selectedRole);
     setUser({ username });
 
-    // Set required tokens
-    localStorage.setItem('token', 'dummy-token-' + Date.now());
+    // Preserve backend-issued JWT if supplied; otherwise fall back (dev only)
+    const existing = localStorage.getItem('token');
+    const finalToken = token || existing || ('dev-token-' + Date.now());
+    localStorage.setItem('token', finalToken);
     localStorage.setItem('userType', selectedRole);
   };
 

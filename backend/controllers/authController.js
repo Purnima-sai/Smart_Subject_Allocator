@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Student = require('../models/Student');
+const Faculty = require('../models/Faculty');
 const { jwtSecret, jwtExpiresIn } = require('../config/jwt');
 
 exports.signup = async (req, res, next) => {
@@ -11,10 +12,18 @@ exports.signup = async (req, res, next) => {
     if (existing) return res.status(400).json({ message: 'Email already registered' });
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, password: hashed, role });
-    // if student role, create Student document
+    
+    // Create role-specific document
     if (role === 'student') {
       await Student.create({ user: user._id });
+    } else if (role === 'faculty') {
+      await Faculty.create({ 
+        user: user._id, 
+        name: name,
+        email: email
+      });
     }
+    
     res.status(201).json({ user });
   } catch (err) {
     next(err);

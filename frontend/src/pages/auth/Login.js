@@ -91,12 +91,13 @@ const Login = () => {
       if (data.user.role !== values.userType && !(data.user.role === 'admin' && values.userType === 'administrator')) {
         throw new Error('Role mismatch. Please select the correct role.');
       }
-      // Store JWT and user info
+      console.log('Login successful, token received:', data.token ? data.token.substring(0, 20) + '...' : 'NO TOKEN');
+      // Store JWT and user info FIRST before calling context login
       localStorage.setItem('token', data.token);
       localStorage.setItem('userType', data.user.role);
       localStorage.setItem('user', JSON.stringify(data.user));
-      // Mark authenticated in context
-      await login({ username: data.user.email, role: data.user.role });
+      // Mark authenticated in context (pass token to ensure it's not overwritten)
+      await login({ username: data.user.email, role: data.user.role, token: data.token });
       // Navigate based on user type
       switch(data.user.role) {
         case 'admin':
