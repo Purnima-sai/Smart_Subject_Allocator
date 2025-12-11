@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { API_ENDPOINTS } from '../../config/api';
 import {
   Box,
   Button,
@@ -73,31 +74,39 @@ const Login = () => {
     try {
       setIsLoading(true);
       setError('');
+      
       // Call backend for authentication
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: values.username,
+          email: values.username, // Frontend sends as 'username' but backend expects 'email'
           password: values.password
         })
       });
+      
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || 'Invalid credentials');
       }
+      
       const data = await res.json();
+      
       // Check role matches
       if (data.user.role !== values.userType && !(data.user.role === 'admin' && values.userType === 'administrator')) {
         throw new Error('Role mismatch. Please select the correct role.');
       }
+      
       console.log('Login successful, token received:', data.token ? data.token.substring(0, 20) + '...' : 'NO TOKEN');
+      
       // Store JWT and user info FIRST before calling context login
       localStorage.setItem('token', data.token);
       localStorage.setItem('userType', data.user.role);
       localStorage.setItem('user', JSON.stringify(data.user));
+      
       // Mark authenticated in context (pass token to ensure it's not overwritten)
       await login({ username: data.user.email, role: data.user.role, token: data.token });
+      
       // Navigate based on user type
       switch(data.user.role) {
         case 'admin':
@@ -114,6 +123,7 @@ const Login = () => {
       }
     } catch (err) {
       setError(err.message || 'Invalid username or password. Please try again.');
+      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
       setSubmitting(false);
